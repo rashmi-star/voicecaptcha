@@ -1,0 +1,15 @@
+name = "voice-captcha-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# ElevenHacks: challenge sessions live in a Durable Object (edge state).
+[[durable_objects.bindings]]
+name = "CHALLENGE_COORDINATOR"
+class_name = "ChallengeCoordinator"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ChallengeCoordinator"]
+
+# Local dev: copy .dev.vars.example → .dev.vars and add keys (wrangler dev loads .dev.vars).
+# Deployed: wrangler secret put GROQ_API_KEY   (etc.)

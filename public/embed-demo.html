@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice CAPTCHA embed demo (parent page)</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 36rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      pre {
+        background: #f4f4f5;
+        padding: 1rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Parent page (your site)</h1>
+    <p>
+      The iframe below loads <code>/embed</code>. Open DevTools → Console or read the log.
+    </p>
+    <iframe
+      id="vc"
+      title="Voice CAPTCHA"
+      src="/embed"
+      width="420"
+      height="560"
+      style="border: 1px solid #ccc; border-radius: 12px; display: block"
+    ></iframe>
+    <h2>postMessage log</h2>
+    <pre id="log"></pre>
+    <script>
+      const logEl = document.getElementById("log");
+      window.addEventListener("message", function (e) {
+        var d = e.data;
+        if (!d || d.type !== "voicecaptcha") return;
+        var line =
+          "[" +
+          e.origin +
+          "] " +
+          JSON.stringify(d, null, 2) +
+          "\n";
+        logEl.textContent += line;
+      });
+    </script>
+  </body>
+</html>

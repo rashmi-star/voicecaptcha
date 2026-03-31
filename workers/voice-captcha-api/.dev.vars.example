@@ -1,0 +1,8 @@
+# Copy this file to .dev.vars (same folder) and paste your keys.
+# Wrangler loads .dev.vars automatically when you run: npm run dev
+# .dev.vars is gitignored — safe for local-only secrets.
+
+GROQ_API_KEY=
+ELEVENLABS_API_KEY=
+# Optional default voice for POST /api/tts-demo (or set in wrangler dashboard)
+# ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
