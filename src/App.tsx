@@ -5,12 +5,13 @@ import { VoiceCaptchaPanel } from "./components/VoiceCaptchaPanel";
 import { ORB_CLASS_NAMES, useMicVisualizer } from "./hooks/useMicVisualizer";
 import { applyTheme, type Theme } from "./lib/theme";
 
-/** Official Google test key (v2) — always passes; use only for local dev. */
+/** Official Google v2 test key — only used when `VITE_RECAPTCHA_SITE_KEY` is unset in dev. */
 const RECAPTCHA_TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
 
+const envSiteKey = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim();
 const recaptchaSiteKey =
-  (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined)?.trim() ||
-  RECAPTCHA_TEST_SITE_KEY;
+  envSiteKey ||
+  (import.meta.env.DEV ? RECAPTCHA_TEST_SITE_KEY : "");
 
 const recaptchaInvisible =
   (import.meta.env.VITE_RECAPTCHA_SIZE as string | undefined)?.trim().toLowerCase() ===

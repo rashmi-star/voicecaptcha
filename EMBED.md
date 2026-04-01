@@ -6,35 +6,50 @@ Host the voice check in an **iframe** on your site (like Google’s widget patte
 
 ## Quick start
 
-1. Deploy the Vite app (static) and the Cloudflare Worker (`workers/voice-captcha-api`) so CORS allows your frontend origin.
-2. Point the iframe at your app’s **`/embed`** route.
+1. Deploy the **Vite app** (e.g. Vercel) and the **Cloudflare Worker** (`workers/voice-captcha-api`). The API lives **only** on the Worker — the static host does **not** expose `/api`.
+2. Point the iframe at your app’s **`/embed`** route and pass **`api_base`** (see below) whenever the embed is **not** same-origin with the Worker (almost always in production).
 3. Listen for **`postMessage`** from the iframe.
 
-### Iframe snippet
+### Why `api_base` is required on other sites
+
+The widget loads from your app origin (e.g. `https://your-app.vercel.app/embed`). By default it calls **`/api/...`** on **that** origin. **Vercel (and most static hosts) have no `/api` route**, so the challenge request fails and the UI shows **“Voice API offline”.**
+
+Always set **`api_base`** to your Worker origin (no `/api` suffix), URL-encoded:
+
+```text
+https://YOUR_WORKER_SUBDOMAIN.workers.dev
+```
+
+### Iframe snippet (production)
+
+Use this shape — **`api_base` is not optional** for embeds that are not proxied to the Worker:
 
 ```html
 <iframe
   id="voicecaptcha"
   title="Voice CAPTCHA"
-  src="https://YOUR_APP_ORIGIN/embed"
+  src="https://YOUR_APP_ORIGIN/embed?api_base=https%3A%2F%2FYOUR_WORKER.workers.dev&parent_origin=https%3A%2F%2Fyoursite.com"
   width="420"
   height="560"
+  allow="microphone"
   style="border: 1px solid #ccc; border-radius: 12px;"
 ></iframe>
 ```
+
+Replace `YOUR_WORKER.workers.dev` with your real Worker URL from Cloudflare. Same value as **`VITE_API_BASE_URL`** for `/demo` (origin only).
 
 ### Query parameters
 
 | Parameter        | Meaning |
 |------------------|---------|
-| `api_base`       | Base URL of the Worker **without** `/api` (e.g. `https://voice-captcha-api.your-subdomain.workers.dev`). Omit for same-origin `/api` (typical local dev with Vite proxy). |
+| `api_base`       | **Required** for typical production embeds: Worker base URL **without** `/api` (e.g. `https://voice-captcha-api.your-subdomain.workers.dev`). Omit only when `/embed` is **same-origin** with an app that proxies `/api` to the Worker (uncommon). |
 | `parent_origin`  | Target origin for `postMessage` (e.g. `https://yoursite.com`). Use a **specific origin** in production; `*` only for quick local tests. |
 
-Example:
+Minimal example (only `api_base`):
 
 ```html
 <iframe
-  src="https://YOUR_APP_ORIGIN/embed?api_base=https%3A%2F%2FYOUR_WORKER.workers.dev&parent_origin=https%3A%2F%2Fyoursite.com"
+  src="https://YOUR_APP_ORIGIN/embed?api_base=https%3A%2F%2FYOUR_WORKER.workers.dev"
   ...
 ></iframe>
 ```
