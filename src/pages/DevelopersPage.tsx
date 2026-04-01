@@ -18,13 +18,19 @@ function InlineCode({ children, className }: { children: ReactNode; className?: 
   );
 }
 
+/** Hosted Voice CAPTCHA UI (Vite app). */
+const VOICECAPTCHA_APP_ORIGIN = "https://voicecaptcha.vercel.app";
+/** Hosted API — pass as `api_base` (no `/api`). Self-hosters replace with their Worker origin. */
+const VOICECAPTCHA_PUBLIC_API_ORIGIN = "https://voice-captcha-api.rashmie30.workers.dev";
+const VOICECAPTCHA_API_BASE_ENCODED = encodeURIComponent(VOICECAPTCHA_PUBLIC_API_ORIGIN);
+
 const preconnectSnippet = `<!-- Optional: faster first connection to your Voice CAPTCHA app host -->
-<link rel="preconnect" href="https://YOUR_APP_ORIGIN" />`;
+<link rel="preconnect" href="${VOICECAPTCHA_APP_ORIGIN}" />`;
 
 const iframeSnippet = `<iframe
   id="voicecaptcha"
   title="Voice CAPTCHA"
-  src="https://YOUR_APP_ORIGIN/embed?api_base=https%3A%2F%2FYOUR_WORKER.workers.dev&parent_origin=https%3A%2F%2Fyoursite.com"
+  src="${VOICECAPTCHA_APP_ORIGIN}/embed?api_base=${VOICECAPTCHA_API_BASE_ENCODED}&parent_origin=https%3A%2F%2Fyoursite.com"
   width="420"
   height="560"
   allow="microphone"
@@ -37,14 +43,14 @@ iframe.width = "420";
 iframe.height = "560";
 iframe.setAttribute("allow", "microphone");
 iframe.src =
-  "https://YOUR_APP_ORIGIN/embed?api_base=" +
-  encodeURIComponent("https://YOUR_WORKER.workers.dev") +
+  "${VOICECAPTCHA_APP_ORIGIN}/embed?api_base=" +
+  encodeURIComponent("${VOICECAPTCHA_PUBLIC_API_ORIGIN}") +
   "&parent_origin=" +
   encodeURIComponent(window.location.origin);
 document.getElementById("voicecaptcha-slot")?.appendChild(iframe);`;
 
 const listenerSnippet = `window.addEventListener("message", (e) => {
-  if (e.origin !== "https://YOUR_APP_ORIGIN") return;
+  if (e.origin !== "${VOICECAPTCHA_APP_ORIGIN}") return;
   const d = e.data;
   if (d?.type !== "voicecaptcha" || d.version !== 1) return;
 
@@ -101,10 +107,14 @@ export default function DevelopersPage() {
               Add Voice CAPTCHA to your site
             </h1>
             <p className="mt-3 leading-relaxed text-muted-foreground">
-              Everything below is self-contained — embed the <InlineCode>/embed</InlineCode> iframe, pass your Worker URL
-              as <InlineCode>api_base</InlineCode>, and listen for <InlineCode>postMessage</InlineCode>. Groq and
-              ElevenLabs keys stay on your <strong className="font-medium text-foreground">Cloudflare Worker</strong>{" "}
-              only, never in the parent page.
+              Voice CAPTCHA is a <strong className="font-medium text-foreground">hosted service</strong>: we run the
+              Cloudflare Worker, transcription (Groq), and phrase audio (ElevenLabs).{" "}
+              <strong className="font-medium text-foreground">You do not need</strong> those API keys on your site — only
+              the iframe, <InlineCode>api_base</InlineCode> pointing at <strong className="font-medium text-foreground">our</strong>{" "}
+              public API (<InlineCode>{VOICECAPTCHA_PUBLIC_API_ORIGIN}</InlineCode>), and{" "}
+              <InlineCode>postMessage</InlineCode>. If you <strong className="font-medium text-foreground">self-host</strong>{" "}
+              the Worker from this repo instead, use your deployment’s URL as <InlineCode>api_base</InlineCode> and
+              configure keys there (see below).
             </p>
           </div>
         </div>
@@ -114,27 +124,25 @@ export default function DevelopersPage() {
             <h2 className="font-heading text-xl font-semibold tracking-tight text-foreground">
               Before you embed
             </h2>
-            <ol className="list-decimal space-y-2 pl-5 leading-relaxed text-muted-foreground">
-              <li>
-                Deploy the <strong className="font-medium text-foreground">static app</strong> (e.g. Vercel) — this
-                serves <InlineCode>/</InlineCode>, <InlineCode>/demo</InlineCode>, <InlineCode>/embed</InlineCode>.
-              </li>
-              <li>
-                Deploy the <strong className="font-medium text-foreground">Voice API</strong> on Cloudflare Workers (
-                <InlineCode>workers/voice-captcha-api</InlineCode>). Note the Worker URL, e.g.{" "}
-                <InlineCode>https://YOUR_WORKER.workers.dev</InlineCode> — <strong className="font-medium text-foreground">no</strong>{" "}
-                <InlineCode>/api</InlineCode> suffix.
-              </li>
-              <li>
-                Set <InlineCode>GROQ_API_KEY</InlineCode> and <InlineCode>ELEVENLABS_API_KEY</InlineCode> as{" "}
-                <strong className="font-medium text-foreground">Wrangler secrets</strong> on that Worker (not in Vercel).
-              </li>
-              <li>
-                For the main site demo, set <InlineCode>VITE_API_BASE_URL</InlineCode> on Vercel to that same Worker
-                origin. For <strong className="font-medium text-foreground">iframes on other websites</strong>, pass the
-                same value as the <InlineCode>api_base</InlineCode> query parameter (see below).
-              </li>
-            </ol>
+            <div className="rounded-lg border border-border/60 bg-muted/30 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+              <p className="font-medium text-foreground">Typical integration (most sites)</p>
+              <p className="mt-2">
+                Iframe host: <InlineCode>{VOICECAPTCHA_APP_ORIGIN}</InlineCode> (<InlineCode>/embed</InlineCode>).{" "}
+                <InlineCode>api_base</InlineCode>: <InlineCode>{VOICECAPTCHA_PUBLIC_API_ORIGIN}</InlineCode> — same value
+                as <InlineCode>VITE_API_BASE_URL</InlineCode> for our deployment. No Groq, ElevenLabs, or Cloudflare setup
+                on your side.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+              <p className="font-medium text-foreground">Optional: self-host the Worker</p>
+              <p className="mt-2">
+                Deploy <InlineCode>workers/voice-captcha-api</InlineCode> to your Cloudflare account, set{" "}
+                <InlineCode>GROQ_API_KEY</InlineCode> and <InlineCode>ELEVENLABS_API_KEY</InlineCode> as Wrangler secrets,
+                and use <strong className="font-medium text-foreground">your</strong> Worker URL (no <InlineCode>/api</InlineCode>
+                ) as <InlineCode>api_base</InlineCode>. Point your own static build’s <InlineCode>VITE_API_BASE_URL</InlineCode>{" "}
+                at that Worker if you fork the UI.
+              </p>
+            </div>
           </section>
 
           <section className="space-y-4">
@@ -142,11 +150,12 @@ export default function DevelopersPage() {
               1. Load the Voice CAPTCHA widget
             </h2>
             <p className="leading-relaxed text-muted-foreground">
-              The widget is the <InlineCode>/embed</InlineCode> route on your app host. The voice API runs on the Worker,
-              not on Vercel — the iframe <strong className="font-medium text-foreground">must</strong> include{" "}
-              <InlineCode>api_base=…</InlineCode> pointing at your Worker, or the browser requests{" "}
-              <InlineCode>/api</InlineCode> on the static host and shows <strong className="font-medium text-foreground">Voice API offline</strong>.
-              Use <InlineCode>allow=&quot;microphone&quot;</InlineCode> so the iframe can record.
+              The widget is the <InlineCode>/embed</InlineCode> route on the Voice CAPTCHA app host (static). The API is
+              on a <strong className="font-medium text-foreground">separate origin</strong> (our hosted Worker or yours).
+              The iframe <strong className="font-medium text-foreground">must</strong> include{" "}
+              <InlineCode>api_base=…</InlineCode> pointing at that API, or the browser hits <InlineCode>/api</InlineCode> on
+              the static host and shows <strong className="font-medium text-foreground">Voice API offline</strong>. Use{" "}
+              <InlineCode>allow=&quot;microphone&quot;</InlineCode> so the iframe can record.
             </p>
 
             <Card className="ring-0 shadow-none">
@@ -169,9 +178,10 @@ export default function DevelopersPage() {
               <CardHeader>
                 <CardTitle className="text-base text-foreground">Static iframe in HTML</CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Replace <InlineCode>YOUR_APP_ORIGIN</InlineCode> (where you deployed this repo),{" "}
-                  <InlineCode>YOUR_WORKER.workers.dev</InlineCode> (Cloudflare), and{" "}
-                  <InlineCode>yoursite.com</InlineCode> (parent page origin for <InlineCode>postMessage</InlineCode>).
+                  Copy-paste uses <InlineCode>{VOICECAPTCHA_APP_ORIGIN}</InlineCode> and{" "}
+                  <InlineCode>{VOICECAPTCHA_PUBLIC_API_ORIGIN}</InlineCode>. Replace{" "}
+                  <InlineCode>yoursite.com</InlineCode> with your parent page origin for <InlineCode>parent_origin</InlineCode>.
+                  Self-hosters: swap in your app URL and Worker URL.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -244,9 +254,9 @@ export default function DevelopersPage() {
             <ul className="list-disc space-y-2 pl-5 leading-relaxed text-muted-foreground">
               <li>
                 <InlineCode>api_base</InlineCode> — <strong className="font-medium text-foreground">Required</strong>{" "}
-                for embeds on other sites: Worker origin <strong className="font-medium text-foreground">without</strong>{" "}
-                <InlineCode>/api</InlineCode>. URL-encode it in the <InlineCode>src</InlineCode> (e.g.{" "}
-                <InlineCode>https%3A%2F%2Fxxx.workers.dev</InlineCode>). Without it → “Voice API offline.”
+                for embeds on other sites: the Voice CAPTCHA API origin (hosted service{" "}
+                <strong className="font-medium text-foreground">or</strong> your Worker) <strong className="font-medium text-foreground">without</strong>{" "}
+                <InlineCode>/api</InlineCode>. URL-encode it in <InlineCode>src</InlineCode>. Without it → “Voice API offline.”
               </li>
               <li>
                 <InlineCode>parent_origin</InlineCode> — Your page’s origin for <InlineCode>postMessage</InlineCode>{" "}
@@ -261,9 +271,9 @@ export default function DevelopersPage() {
             </h2>
             <ul className="list-disc space-y-2 pl-5 leading-relaxed text-muted-foreground">
               <li>
-                <strong className="font-medium text-foreground">“Voice API offline”</strong> — Add{" "}
-                <InlineCode>api_base=&lt;your Worker origin&gt;</InlineCode> to the iframe <InlineCode>src</InlineCode>.
-                The static app does not implement <InlineCode>/api</InlineCode>; only the Worker does.
+                <strong className="font-medium text-foreground">“Voice API offline”</strong> — Set{" "}
+                <InlineCode>api_base</InlineCode> to the hosted Voice CAPTCHA API origin (or your self-hosted Worker).
+                The iframe’s static host does not serve <InlineCode>/api</InlineCode>.
               </li>
               <li>
                 <strong className="font-medium text-foreground">Mic never starts</strong> — Ensure{" "}

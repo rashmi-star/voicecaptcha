@@ -1,8 +1,12 @@
 # Embedding Voice CAPTCHA (reCAPTCHA-style)
 
-Host the voice check in an **iframe** on your site (like Google’s widget pattern). Put **reCAPTCHA or other bot checks on the parent page**; this iframe only verifies the spoken phrase against your Worker API.
+Host the voice check in an **iframe** on your site (like Google’s widget pattern). Put **reCAPTCHA or other bot checks on the parent page**; this iframe only verifies the spoken phrase against the Voice CAPTCHA API.
 
-**Hosting:** The UI can live on **Vercel** (static build). **ElevenLabs** and **Groq** API keys belong on the **Cloudflare Worker** only — not in Vercel env. See **[DEPLOY.md](./DEPLOY.md)**.
+**Hosted service:** By default we run the Cloudflare Worker; **Groq** and **ElevenLabs** keys live on **our** deployment — **embedders do not need those keys**. Pass our published API origin as **`api_base`**. **Optional:** self-host `workers/voice-captcha-api` and use your Worker URL + your own secrets instead.
+
+**Full guide (no repo required):** open **`/developers`** on the deployed Voice CAPTCHA app.
+
+**Hosting:** The UI can live on **Vercel** (static build). See **[DEPLOY.md](./DEPLOY.md)** for splitting UI vs API.
 
 ## Quick start
 
@@ -28,7 +32,7 @@ Use this shape — **`api_base` is not optional** for embeds that are not proxie
 <iframe
   id="voicecaptcha"
   title="Voice CAPTCHA"
-  src="https://YOUR_APP_ORIGIN/embed?api_base=https%3A%2F%2FYOUR_WORKER.workers.dev&parent_origin=https%3A%2F%2Fyoursite.com"
+  src="https://voicecaptcha.vercel.app/embed?api_base=https%3A%2F%2Fvoice-captcha-api.rashmie30.workers.dev&parent_origin=https%3A%2F%2Fyoursite.com"
   width="420"
   height="560"
   allow="microphone"
@@ -36,7 +40,7 @@ Use this shape — **`api_base` is not optional** for embeds that are not proxie
 ></iframe>
 ```
 
-Replace `YOUR_WORKER.workers.dev` with your real Worker URL from Cloudflare. Same value as **`VITE_API_BASE_URL`** for `/demo` (origin only).
+**Hosted service:** `api_base` points at **`https://voice-captcha-api.rashmie30.workers.dev`** (no `/api`). Same origin as **`VITE_API_BASE_URL`** on the Voice CAPTCHA Vercel app. Self-hosters replace with their Worker URL.
 
 ### Query parameters
 
