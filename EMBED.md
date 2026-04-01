@@ -2,6 +2,8 @@
 
 Host the voice check in an **iframe** on your site (like Google’s widget pattern). Put **reCAPTCHA or other bot checks on the parent page**; this iframe only verifies the spoken phrase against your Worker API.
 
+**Hosting:** The UI can live on **Vercel** (static build). **ElevenLabs** and **Groq** API keys belong on the **Cloudflare Worker** only — not in Vercel env. See **[DEPLOY.md](./DEPLOY.md)**.
+
 ## Quick start
 
 1. Deploy the Vite app (static) and the Cloudflare Worker (`workers/voice-captcha-api`) so CORS allows your frontend origin.

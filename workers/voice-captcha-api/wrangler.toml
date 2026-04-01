@@ -7,9 +7,10 @@ compatibility_date = "2024-12-01"
 name = "CHALLENGE_COORDINATOR"
 class_name = "ChallengeCoordinator"
 
+# Free plan: Durable Objects must be SQLite-backed (error 10097 if you use new_classes).
 [[migrations]]
 tag = "v1"
-new_classes = ["ChallengeCoordinator"]
+new_sqlite_classes = ["ChallengeCoordinator"]
 
 # Local dev: copy .dev.vars.example → .dev.vars and add keys (wrangler dev loads .dev.vars).
 # Deployed: wrangler secret put GROQ_API_KEY   (etc.)

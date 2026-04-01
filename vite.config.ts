@@ -15,7 +15,8 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
-    strictPort: true,
+    /** If 5173 is taken (e.g. another `npm run dev`), use the next free port. */
+    strictPort: false,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8787",

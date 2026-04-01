@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
  * use `page` from the fixture, and avoid dynamic iframe `name` attributes.
  */
 test("open app and complete reCAPTCHA checkbox", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/demo");
 
   const anchorFrame = page.frameLocator('iframe[src*="api2/anchor"]');
   await anchorFrame.locator("#recaptcha-anchor").click();

@@ -15,7 +15,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Playwright drives reCAPTCHA checkbox (local app)", () => {
   test("automation can click the widget and enable Record", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/demo");
 
     const record = page.getByRole("button", { name: "Record" });
     await expect(record).toBeDisabled();

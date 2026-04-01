@@ -3,10 +3,15 @@ import {
   VoiceCaptchaPanel,
   type VoiceCaptchaEmbedResult,
 } from "./components/VoiceCaptchaPanel";
+import { ORB_CLASS_NAMES, useMicVisualizer } from "./hooks/useMicVisualizer";
+import { applyTheme, type Theme } from "./lib/theme";
 
 const params = new URLSearchParams(window.location.search);
 const parentOrigin = params.get("parent_origin") || "*";
-const apiBaseUrl = params.get("api_base")?.trim() || "";
+const apiBaseUrl =
+  params.get("api_base")?.trim() ||
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
+  "";
 
 function targetOrigin(): string {
   return parentOrigin === "*" ? "*" : parentOrigin;
@@ -24,17 +29,13 @@ function postResult(result: VoiceCaptchaEmbedResult) {
 }
 
 export default function EmbedApp() {
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
+  const [theme, setTheme] = useState<Theme>(() =>
     document.documentElement.dataset.theme === "light" ? "light" : "dark"
   );
+  const { stageRef, orbRefs, handleVoiceCaptchaStream } = useMicVisualizer();
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem("voicecaptcha-theme", theme);
-    } catch {
-      /* ignore */
-    }
+    applyTheme(theme);
   }, [theme]);
 
   const onResult = useCallback((result: VoiceCaptchaEmbedResult) => {
@@ -82,10 +83,27 @@ export default function EmbedApp() {
         Add your own bot checks (e.g. reCAPTCHA) on this page; this widget verifies the spoken phrase.
       </p>
 
+      <div className="embed-stage-wrap">
+        <div className="stage" ref={stageRef} aria-hidden="true">
+          <div className="orb-wrap">
+            {ORB_CLASS_NAMES.map((cls, i) => (
+              <div
+                key={cls}
+                className={cls}
+                ref={(el) => {
+                  orbRefs.current[i] = el;
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
       <VoiceCaptchaPanel
         captchaRequired={false}
         embed
         apiBaseUrl={apiBaseUrl || undefined}
+        onRecordingStream={handleVoiceCaptchaStream}
         onVoiceCaptchaResult={onResult}
       />
     </div>

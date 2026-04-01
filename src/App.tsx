@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
 import { VoiceCaptchaPanel } from "./components/VoiceCaptchaPanel";
-
-const ORB_CLASSES = ["orb orb-1", "orb orb-2", "orb orb-3", "orb orb-4"];
+import { ORB_CLASS_NAMES, useMicVisualizer } from "./hooks/useMicVisualizer";
+import { applyTheme, type Theme } from "./lib/theme";
 
 /** Official Google test key (v2) — always passes; use only for local dev. */
 const RECAPTCHA_TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
@@ -15,8 +15,6 @@ const recaptchaInvisible =
   (import.meta.env.VITE_RECAPTCHA_SIZE as string | undefined)?.trim().toLowerCase() ===
   "invisible";
 
-type Theme = "light" | "dark";
-
 function readThemeFromDom(): Theme {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
@@ -25,126 +23,13 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(readThemeFromDom);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const orbRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | MediaElementAudioSourceNode | null>(
-    null
-  );
-  const animationRef = useRef<number>(0);
   const splitShellRef = useRef<HTMLDivElement>(null);
-  const streamSetupGenRef = useRef(0);
   const [splitLeftPct, setSplitLeftPct] = useState(42);
+  const { stageRef, orbRefs, handleVoiceCaptchaStream } = useMicVisualizer();
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem("voicecaptcha-theme", theme);
-    } catch {
-      /* ignore */
-    }
+    applyTheme(theme);
   }, [theme]);
-
-  const ensureAudioContext = useCallback(async () => {
-    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
-      audioContextRef.current = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    }
-    if (audioContextRef.current.state === "suspended") {
-      await audioContextRef.current.resume();
-    }
-  }, []);
-
-  const disconnectNodes = useCallback(() => {
-    if (sourceRef.current) {
-      try {
-        sourceRef.current.disconnect();
-      } catch {
-        /* ignore */
-      }
-      sourceRef.current = null;
-    }
-    analyserRef.current = null;
-  }, []);
-
-  const stopVisualizerLoop = useCallback(() => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = 0;
-    }
-    orbRefs.current.forEach((orb) => {
-      if (orb) orb.style.transform = "";
-    });
-    stageRef.current?.classList.remove("active");
-  }, []);
-
-  const runVisualizer = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return;
-    stageRef.current?.classList.add("active");
-    const freq = new Uint8Array(analyser.frequencyBinCount);
-    const time = new Uint8Array(analyser.frequencyBinCount);
-
-    const tick = () => {
-      animationRef.current = requestAnimationFrame(tick);
-      analyser.getByteFrequencyData(freq);
-      let sum = 0;
-      const n = Math.min(freq.length, 64);
-      for (let i = 0; i < n; i++) sum += freq[i];
-      const avg = sum / n / 255;
-      const boost = 0.35 + avg * 1.4;
-
-      analyser.getByteTimeDomainData(time);
-      let peak = 0;
-      for (let i = 0; i < time.length; i++) {
-        const v = (time[i] - 128) / 128;
-        if (Math.abs(v) > peak) peak = Math.abs(v);
-      }
-      const pulse = 0.92 + peak * 0.35;
-
-      const t = performance.now() * 0.001;
-      orbRefs.current.forEach((orb, i) => {
-        if (!orb) return;
-        const phase = i * 0.9;
-        const wobble = Math.sin(t * 2 + phase) * 0.04 * boost;
-        const scale = (1 + wobble) * boost * pulse;
-        const rot = Math.sin(t * 1.5 + phase) * 3 * boost;
-        orb.style.transform = `translate(${Math.sin(t + phase) * 6 * boost}%, ${Math.cos(t * 0.8 + phase) * 5 * boost}%) scale(${scale}) rotate(${rot}deg)`;
-        orb.style.opacity = String(0.65 + avg * 0.35);
-      });
-    };
-    tick();
-  }, []);
-
-  const handleVoiceCaptchaStream = useCallback(
-    (stream: MediaStream | null) => {
-      streamSetupGenRef.current += 1;
-      const gen = streamSetupGenRef.current;
-      disconnectNodes();
-      stopVisualizerLoop();
-      if (!stream) return;
-
-      void (async () => {
-        await ensureAudioContext();
-        if (gen !== streamSetupGenRef.current) return;
-        const ctx = audioContextRef.current;
-        if (!ctx) return;
-
-        disconnectNodes();
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.65;
-        const source = ctx.createMediaStreamSource(stream);
-        source.connect(analyser);
-        analyserRef.current = analyser;
-        sourceRef.current = source;
-        if (gen !== streamSetupGenRef.current) return;
-        runVisualizer();
-      })();
-    },
-    [disconnectNodes, ensureAudioContext, runVisualizer, stopVisualizerLoop]
-  );
 
   const prepareVoiceRecord = useCallback(async (): Promise<boolean> => {
     if (recaptchaInvisible) {
@@ -185,13 +70,6 @@ export default function App() {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
-
-  useEffect(() => {
-    return () => {
-      disconnectNodes();
-      stopVisualizerLoop();
-    };
-  }, [disconnectNodes, stopVisualizerLoop]);
 
   return (
     <div className="app">
@@ -270,7 +148,7 @@ export default function App() {
         <section className="panel panel--right" aria-label="Audio">
           <div className="stage" ref={stageRef} aria-hidden="true">
             <div className="orb-wrap">
-              {ORB_CLASSES.map((cls, i) => (
+              {ORB_CLASS_NAMES.map((cls, i) => (
                 <div
                   key={cls}
                   className={cls}
@@ -287,6 +165,9 @@ export default function App() {
             onPrepareRecord={prepareVoiceRecord}
             captchaRequired={!recaptchaInvisible}
             captchaSatisfied={!!captchaToken}
+            apiBaseUrl={
+              (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || undefined
+            }
           />
         </section>
       </div>
