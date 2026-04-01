@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
+import { SiteHeader } from "./components/SiteHeader";
 import { VoiceCaptchaPanel } from "./components/VoiceCaptchaPanel";
 import { ORB_CLASS_NAMES, useMicVisualizer } from "./hooks/useMicVisualizer";
 import { applyTheme, type Theme } from "./lib/theme";
@@ -21,7 +22,7 @@ function readThemeFromDom(): Theme {
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(readThemeFromDom);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [, setCaptchaToken] = useState<string | null>(null);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const splitShellRef = useRef<HTMLDivElement>(null);
   const [splitLeftPct, setSplitLeftPct] = useState(42);
@@ -30,23 +31,6 @@ export default function App() {
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
-
-  const prepareVoiceRecord = useCallback(async (): Promise<boolean> => {
-    if (recaptchaInvisible) {
-      const widget = recaptchaRef.current;
-      if (!widget) return false;
-      try {
-        const token = await widget.executeAsync();
-        if (!token) return false;
-        setCaptchaToken(token);
-        return true;
-      } catch {
-        recaptchaRef.current?.reset();
-        return false;
-      }
-    }
-    return Boolean(captchaToken);
-  }, [captchaToken]);
 
   const handleDividerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -72,49 +56,25 @@ export default function App() {
   };
 
   return (
-    <div className="app">
-      <h1 className="sr-only">Voice captcha</h1>
+    <div className="theme flex min-h-dvh flex-col bg-background text-foreground">
+      <SiteHeader
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+        active="demo"
+      />
 
-      <div className="app__content">
-      <div className="app__topbar">
-        <button
-          type="button"
-          className="theme-toggle"
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={theme === "dark" ? "Light mode" : "Dark mode"}
-        >
-          {theme === "dark" ? (
-            <svg
-              className="theme-toggle__icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-            </svg>
-          ) : (
-            <svg className="theme-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M21.752 15.002A9.718 9.718 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z"
-              />
-            </svg>
-          )}
-        </button>
-      </div>
+      <div className="app app--with-site-header">
+        <h1 className="sr-only">Voice captcha</h1>
 
+        <div className="app__content app__content--demo">
       <div
         className="split-shell"
         ref={splitShellRef}
         style={{ "--split-left": `${splitLeftPct}%` } as React.CSSProperties}
       >
-        <section className="panel panel--left" aria-label="Verification">
-          <div className="panel-left-center">
+        <section className="panel panel--left" aria-label="Classic CAPTCHA">
+          <div className="demo-panel-stack">
+            <h2 className="demo-panel-heading">Classic CAPTCHA</h2>
             <div
               className={
                 recaptchaInvisible ? "recaptcha-wrap recaptcha-wrap--invisible" : "recaptcha-wrap"
@@ -145,32 +105,34 @@ export default function App() {
           onPointerDown={handleDividerPointerDown}
         />
 
-        <section className="panel panel--right" aria-label="Audio">
-          <div className="stage" ref={stageRef} aria-hidden="true">
-            <div className="orb-wrap">
-              {ORB_CLASS_NAMES.map((cls, i) => (
-                <div
-                  key={cls}
-                  className={cls}
-                  ref={(el) => {
-                    orbRefs.current[i] = el;
-                  }}
-                />
-              ))}
+        <section className="panel panel--right" aria-label="Voice CAPTCHA">
+          <div className="demo-panel-stack">
+            <h2 className="demo-panel-heading">Voice CAPTCHA</h2>
+            <div className="stage" ref={stageRef} aria-hidden="true">
+              <div className="orb-wrap">
+                {ORB_CLASS_NAMES.map((cls, i) => (
+                  <div
+                    key={cls}
+                    className={cls}
+                    ref={(el) => {
+                      orbRefs.current[i] = el;
+                    }}
+                  />
+                ))}
+              </div>
             </div>
+            <VoiceCaptchaPanel
+              onRecordingStream={handleVoiceCaptchaStream}
+              captchaRequired={false}
+              captchaSatisfied={true}
+              apiBaseUrl={
+                (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || undefined
+              }
+            />
           </div>
-
-          <VoiceCaptchaPanel
-            onRecordingStream={handleVoiceCaptchaStream}
-            onPrepareRecord={prepareVoiceRecord}
-            captchaRequired={!recaptchaInvisible}
-            captchaSatisfied={!!captchaToken}
-            apiBaseUrl={
-              (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || undefined
-            }
-          />
         </section>
       </div>
+        </div>
       </div>
     </div>
   );

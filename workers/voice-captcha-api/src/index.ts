@@ -1,6 +1,6 @@
 /**
- * Edge API: Durable Object challenge state + Groq Whisper + ElevenLabs TTS.
- * ElevenHacks: Cloudflare Workers + DO + ElevenLabs voice.
+ * Edge API: Durable Object challenge state + Groq Whisper + ElevenLabs TTS (phrase playback).
+ * English phrases; client plays TTS before user repeats.
  */
 
 import type { WorkerEnv } from "./types";
@@ -19,10 +19,13 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+/** Lowercase, strip accents for fuzzy match, keep letters across languages (Latin scripts). */
 function normalize(s: string): string {
   return s
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -113,7 +116,10 @@ export default {
       if (!res.ok) {
         return json({ error: data.error ?? "challenge failed" }, res.status);
       }
-      return json({ challengeId: data.challengeId, phrase: data.phrase });
+      return json({
+        challengeId: data.challengeId,
+        phrase: data.phrase,
+      });
     }
 
     if (url.pathname === "/api/verify-voice" && request.method === "POST") {
@@ -168,7 +174,17 @@ export default {
 
       const ordered = orderedWordScoreFuzzy(entry.phrase, transcript);
       const bag = bagOfWordsScore(entry.phrase, transcript);
-      const pass = ordered >= 0.98 && transcript.trim().length >= 8;
+      const expWords = normalize(entry.phrase).split(/\s+/).filter(Boolean).length;
+      const wordCount = normalize(transcript)
+        .split(/\s+/)
+        .filter(Boolean).length;
+      /** Stricter than before: almost all words in order, high recall, enough words spoken. */
+      const minWordsSpoken = Math.max(6, Math.ceil(expWords * 0.88));
+      const pass =
+        ordered >= 0.99 &&
+        bag >= 0.93 &&
+        wordCount >= minWordsSpoken &&
+        transcript.trim().length >= 12;
 
       await stub.fetch(
         new Request("https://do/delete", {
@@ -212,8 +228,6 @@ export default {
         matchScore: Math.round(ordered * 1000) / 1000,
         bagScore: Math.round(bag * 1000) / 1000,
         humanLikeness: Math.round(humanLikeness * 100) / 100,
-        /** ElevenLabs TTS can read this phrase on pass (see UI). */
-        ttsPhraseOnPass: pass ? entry.phrase : undefined,
         note:
           "humanLikeness is a demo score only — integrate a deepfake-audio API for real synthetic-voice detection.",
       });
