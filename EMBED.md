@@ -1,18 +1,16 @@
-# Embedding Voice CAPTCHA (reCAPTCHA-style)
+# Embedding Voice CAPTCHA
 
-Host the voice check in an **iframe** on your site (like Google’s widget pattern). Put **reCAPTCHA or other bot checks on the parent page**; this iframe only verifies the spoken phrase against the Voice CAPTCHA API.
+Host the voice check in an **iframe** on your site (similar to [Loading reCAPTCHA](https://developers.google.com/recaptcha/docs/loading): use **resource hints** where helpful, and don’t assume the widget is usable until it signals **ready**). Put other bot checks on the parent page; the iframe handles the spoken verification step.
 
-**Hosted service:** By default we run the Cloudflare Worker; **Groq** and **ElevenLabs** keys live on **our** deployment — **embedders do not need those keys**. Pass our published API origin as **`api_base`**. **Optional:** self-host `workers/voice-captcha-api` and use your Worker URL + your own secrets instead.
+**No API keys on your site** — pass our public **`api_base`** in the iframe URL. Full copy-paste guide: **`/developers`** on the hosted app.
 
-**Full guide (no repo required):** open **`/developers`** on the deployed Voice CAPTCHA app.
-
-**Hosting:** The UI can live on **Vercel** (static build). See **[DEPLOY.md](./DEPLOY.md)** for splitting UI vs API.
+Self-hosting and backend setup: **[GitHub repo](https://github.com/rashmi-star/voicecaptcha)** (not required to use the hosted embed).
 
 ## Quick start
 
-1. Deploy the **Vite app** (e.g. Vercel) and the **Cloudflare Worker** (`workers/voice-captcha-api`). The API lives **only** on the Worker — the static host does **not** expose `/api`.
-2. Point the iframe at your app’s **`/embed`** route and pass **`api_base`** (see below) whenever the embed is **not** same-origin with the Worker (almost always in production).
-3. Listen for **`postMessage`** from the iframe.
+1. Add **`preconnect`** in `<head>` to the embed app origin and verification API origin (optional, improves first load — same idea as Google’s loading doc).
+2. Point the iframe at **`/embed`** and pass **`api_base`** (required for typical cross-origin embeds).
+3. Listen for **`postMessage`**; wait for **`event: "ready"`** before treating the widget as loaded (like **`grecaptcha.ready()`**).
 
 ### Why `api_base` is required on other sites
 
@@ -22,6 +20,18 @@ Always set **`api_base`** to your Worker origin (no `/api` suffix), URL-encoded:
 
 ```text
 https://YOUR_WORKER_SUBDOMAIN.workers.dev
+```
+
+### Loading sample (head + iframe + listener)
+
+```html
+<head>
+  <link rel="preconnect" href="https://voicecaptcha.vercel.app" />
+  <link rel="preconnect" href="https://voice-captcha-api.rashmie30.workers.dev" />
+</head>
+<body>
+  <!-- iframe + postMessage listener: see /developers for full HTML -->
+</body>
 ```
 
 ### Iframe snippet (production)
@@ -40,7 +50,7 @@ Use this shape — **`api_base` is not optional** for embeds that are not proxie
 ></iframe>
 ```
 
-**Hosted service:** `api_base` points at **`https://voice-captcha-api.rashmie30.workers.dev`** (no `/api`). Same origin as **`VITE_API_BASE_URL`** on the Voice CAPTCHA Vercel app. Self-hosters replace with their Worker URL.
+**Hosted service:** `api_base` is **`https://voice-captcha-api.rashmie30.workers.dev`** (no `/api`). If you self-host, use your deployment’s API base URL instead — see the repo.
 
 ### Query parameters
 

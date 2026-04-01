@@ -6,8 +6,8 @@ Official challenge page: **[Hack #2: Cloudflare](https://hacks.elevenlabs.io/hac
 
 | Official ask | This project |
 |--------------|----------------|
-| **“Build an AI-powered app using both Cloudflare and ElevenLabs’ developer platforms”** | **Cloudflare:** Workers + **Durable Objects** (`ChallengeCoordinator`). **ElevenLabs:** TTS via `POST /api/tts-demo` (Worker holds `xi-api-key`). |
-| **“Creative use of Workers, Durable Objects, and … ElevenLabs APIs”** | Workers = API + transcription orchestration; DO = per-challenge state; ElevenLabs = speech synthesis for post-pass contrast. **Groq** is extra (not required by brief but fine). |
+| **“Build an AI-powered app using both Cloudflare and ElevenLabs’ developer platforms”** | **Cloudflare:** Workers + **Durable Objects** (`ChallengeCoordinator`). **ElevenLabs:** TTS via `POST /api/tts-demo` (Worker holds `xi-api-key`) — users hear the challenge phrase in synthetic speech, then repeat it. |
+| **“Creative use of Workers, Durable Objects, and … ElevenLabs APIs”** | Workers = API + Groq transcription orchestration; DO = per-challenge state; ElevenLabs = **multilingual TTS** for the spoken challenge. **Groq** is extra (not required by brief but fine). |
 | **“Submit a high-quality viral-style video demonstrating what you’ve built”** | **Your action item:** record and upload per their form (see [ARCHITECTURE.md](./ARCHITECTURE.md) video outline). Code alone is not enough if the rules require video. |
 | **Deployed on Cloudflare** | **Worker (+ DO)** is deployed to Cloudflare — this satisfies the platform requirement. UI can stay on Vercel/elsewhere; the hack brief still highlights Workers + DO + ElevenLabs in the **backend**. |
 | **Tag @CloudflareDev, @elevenlabsio, #ElevenHacks** | Do this on submission social posts for scoring (+50 pts/platform per their [scoring](https://hacks.elevenlabs.io/hackathons/1)). |
@@ -32,7 +32,7 @@ Your app matches the **Cloudflare × ElevenLabs** track: edge Worker API, **Dura
    - Frontend (Vercel or similar): `/`, `/demo`, `/embed`.
    - Worker: `wrangler deploy`; secrets only on Cloudflare (`GROQ_API_KEY`, `ELEVENLABS_API_KEY`).
 3. **README** — Root [README.md](./README.md) already explains the stack; add your **live URLs** at the top when ready.
-4. **Short video (often required)** — 30–60s: split UI (`/demo`), reCAPTCHA → speak phrase → pass → optional **Play ElevenLabs voice** (same phrase, synthetic vs human story). Outline: [ARCHITECTURE.md](./ARCHITECTURE.md) (“Viral-style video outline”).
+4. **Short video (often required)** — 30–60s: `/demo` or `/embed`, **Play phrase** (ElevenLabs) → user repeats → pass/fail. Mention Workers + DO + ElevenLabs + Groq. Outline: [ARCHITECTURE.md](./ARCHITECTURE.md) (“Viral-style video outline”).
 5. **Social / tags** (when they ask for posts) — [@CloudflareDev](https://x.com/CloudflareDev), [@elevenlabsio](https://x.com/elevenlabsio), hashtag **`#ElevenHacks`** (see [ARCHITECTURE.md](./ARCHITECTURE.md) § ElevenHacks).
 
 ## What judges can verify
