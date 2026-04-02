@@ -93,6 +93,10 @@ export function VoiceCaptchaPanel({
   /** Words matched from live speech (Web Speech API) while recording. */
   const [readMatched, setReadMatched] = useState(0);
   const [readAlongAvailable, setReadAlongAvailable] = useState(false);
+  const [elevenLabsReady, setElevenLabsReady] = useState(false);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -122,7 +126,21 @@ export function VoiceCaptchaPanel({
     setReadAlongAvailable(getSpeechRecognitionCtor() !== null);
   }, []);
 
+  useEffect(() => {
+    fetch(`${api}/health`)
+      .then((r) => r.json() as Promise<{ elevenlabs?: boolean }>)
+      .then((d) => setElevenLabsReady(Boolean(d.elevenlabs)))
+      .catch(() => setElevenLabsReady(false));
+  }, [api]);
+
   const loadChallenge = useCallback(() => {
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current.src = "";
+      ttsAudioRef.current = null;
+    }
+    setTtsPlaying(false);
+    setTtsError(null);
     stopSpeechRecognition();
     setLine(null);
     setResult(null);
@@ -146,6 +164,57 @@ export function VoiceCaptchaPanel({
     loadChallenge();
   }, [loadChallenge]);
 
+  const playElevenLabsTts = async (text: string) => {
+    if (!text.trim() || !elevenLabsReady) return;
+    setTtsError(null);
+    setTtsPlaying(true);
+    try {
+      const res = await fetch(`${api}/tts-demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        audioBase64?: string;
+        mime?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.audioBase64) {
+        setTtsError(data.error ?? "ElevenLabs TTS unavailable");
+        setTtsPlaying(false);
+        return;
+      }
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.src = "";
+      }
+      const mime = data.mime ?? "audio/mpeg";
+      const audio = new Audio(`data:${mime};base64,${data.audioBase64}`);
+      ttsAudioRef.current = audio;
+      audio.onended = () => setTtsPlaying(false);
+      /* Don’t surface onerror / play() rejections as user-visible errors: browsers often fire
+         spurious errors for data-URL audio even when playback succeeds. */
+      audio.onerror = () => setTtsPlaying(false);
+      try {
+        await audio.play();
+      } catch {
+        setTtsPlaying(false);
+      }
+    } catch {
+      setTtsPlaying(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current = null;
+      }
+    };
+  }, []);
+
   const startVcRecord = async () => {
     if (captchaRequired && !captchaSatisfied) {
       setLine("Complete CAPTCHA first");
@@ -161,6 +230,12 @@ export function VoiceCaptchaPanel({
     setResult(null);
     setLine(null);
     try {
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.src = "";
+        ttsAudioRef.current = null;
+      }
+      setTtsPlaying(false);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       onRecordingStream?.(stream);
       chunksRef.current = [];
@@ -285,6 +360,7 @@ export function VoiceCaptchaPanel({
 
   const challengeReady = Boolean(phrase && challengeId);
   const phraseWords = useMemo(() => splitPhraseWords(phrase), [phrase]);
+  /** Word highlights only while the user is recording their reply (not during Play phrase). */
   const showReadAlong = recordingVc && readAlongAvailable && phraseWords.length > 0;
 
   return (
@@ -347,6 +423,21 @@ export function VoiceCaptchaPanel({
           <div className="voice-captcha__actions">
             <button
               type="button"
+              className="btn-vc btn-vc--tts"
+              onClick={() => void playElevenLabsTts(phrase)}
+              disabled={
+                busy ||
+                !challengeReady ||
+                !elevenLabsReady ||
+                ttsPlaying ||
+                recordingVc
+              }
+              title="Hear the phrase (ElevenLabs)"
+            >
+              {ttsPlaying ? "Playing…" : "Play phrase"}
+            </button>
+            <button
+              type="button"
               className="btn-vc"
               onClick={() => void startVcRecord()}
               disabled={
@@ -376,8 +467,15 @@ export function VoiceCaptchaPanel({
               ↻
             </button>
           </div>
+          {!elevenLabsReady && challengeReady ? (
+            <p className="voice-captcha__read-hint">
+              Add <code>ELEVENLABS_API_KEY</code> on the Worker to enable <strong>Play phrase</strong>.
+            </p>
+          ) : null}
         </>
       )}
+
+      {ttsError ? <p className="voice-captcha__tts-err">{ttsError}</p> : null}
 
       {line && line !== "…" ? (
         <p

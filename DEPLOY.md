@@ -22,8 +22,6 @@ This repo is designed for **two independent deployments**. They use different ho
    | Name | Required? | Notes |
    |------|------------|--------|
    | `VITE_API_BASE_URL` | **Yes** for API calls | Worker **origin only**, no `/api` (e.g. `https://voice-captcha-api.xxx.workers.dev`). Without this, `/demo` and `/embed` try same-origin `/api`, which **does not exist** on Vercel (unlike local dev, which proxies `/api` to Wrangler). |
-   | `VITE_RECAPTCHA_SITE_KEY` | Optional | Your reCAPTCHA **site** key; omit to rely on Google’s test key in dev only — use a real key in production. |
-   | `VITE_RECAPTCHA_SIZE` | Optional | `checkbox` or `invisible`. |
 
    Redeploy after changing env vars (Vite bakes `VITE_*` at build time).
 
