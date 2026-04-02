@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { countReadProgress, splitPhraseWords } from "@/lib/readAlongMatch";
 
 type VerifyReason = "human_pass" | "wrong_sentence" | "bot_suspected";
 
@@ -60,6 +62,13 @@ function apiPrefix(base: string | undefined): string {
   return b ? `${b}/api` : "/api";
 }
 
+function getSpeechRecognitionCtor(): (new () => SpeechRecognition) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & { webkitSpeechRecognition?: unknown; SpeechRecognition?: unknown };
+  const C = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+  return typeof C === "function" ? (C as new () => SpeechRecognition) : null;
+}
+
 export function VoiceCaptchaPanel({
   onRecordingStream,
   onPrepareRecord,
@@ -70,7 +79,7 @@ export function VoiceCaptchaPanel({
   embed = false,
 }: VoiceCaptchaPanelProps) {
   const api = apiPrefix(apiBaseUrl);
-  /** Kept in state for TTS + verify only — never rendered. */
+  /** Challenge text for verify + on-screen copy. */
   const [phrase, setPhrase] = useState("");
   const [challengeId, setChallengeId] = useState("");
   const [apiReady, setApiReady] = useState<boolean | null>(null);
@@ -79,22 +88,42 @@ export function VoiceCaptchaPanel({
   const [busy, setBusy] = useState(false);
   const [recordingVc, setRecordingVc] = useState(false);
   const recordingVcRef = useRef(false);
-  const [elevenLabsReady, setElevenLabsReady] = useState(false);
-  const [ttsPlaying, setTtsPlaying] = useState(false);
-  const [ttsError, setTtsError] = useState<string | null>(null);
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRecRef = useRef<SpeechRecognition | null>(null);
+  const phraseWordsRef = useRef<string[]>([]);
+  /** Words matched from live speech (Web Speech API) while recording. */
+  const [readMatched, setReadMatched] = useState(0);
+  const [readAlongAvailable, setReadAlongAvailable] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingMimeRef = useRef<string>("audio/webm");
 
-  const loadChallenge = useCallback(() => {
-    if (ttsAudioRef.current) {
-      ttsAudioRef.current.pause();
-      ttsAudioRef.current.src = "";
-      ttsAudioRef.current = null;
+  const stopSpeechRecognition = useCallback(() => {
+    const r = speechRecRef.current;
+    speechRecRef.current = null;
+    if (r) {
+      r.onend = null;
+      r.onresult = null;
+      try {
+        r.stop();
+      } catch {
+        /* already stopped */
+      }
+      try {
+        r.abort();
+      } catch {
+        /* */
+      }
     }
-    setTtsPlaying(false);
+    setReadMatched(0);
+  }, []);
+
+  useEffect(() => {
+    setReadAlongAvailable(getSpeechRecognitionCtor() !== null);
+  }, []);
+
+  const loadChallenge = useCallback(() => {
+    stopSpeechRecognition();
     setLine(null);
     setResult(null);
     fetch(`${api}/challenge`)
@@ -111,18 +140,11 @@ export function VoiceCaptchaPanel({
         setApiReady(false);
         setLine("Voice API offline");
       });
-  }, [api]);
+  }, [api, stopSpeechRecognition]);
 
   useEffect(() => {
     loadChallenge();
   }, [loadChallenge]);
-
-  useEffect(() => {
-    fetch(`${api}/health`)
-      .then((r) => r.json() as Promise<{ elevenlabs?: boolean }>)
-      .then((d) => setElevenLabsReady(Boolean(d.elevenlabs)))
-      .catch(() => setElevenLabsReady(false));
-  }, [api]);
 
   const startVcRecord = async () => {
     if (captchaRequired && !captchaSatisfied) {
@@ -159,6 +181,44 @@ export function VoiceCaptchaPanel({
       mediaRecorderRef.current = mr;
       recordingVcRef.current = true;
       setRecordingVc(true);
+
+      const words = splitPhraseWords(phrase);
+      phraseWordsRef.current = words;
+      setReadMatched(0);
+
+      const SR = getSpeechRecognitionCtor();
+      if (SR && words.length > 0) {
+        const rec = new SR();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = navigator.language || "en-US";
+        rec.onresult = (e: SpeechRecognitionEvent) => {
+          let t = "";
+          for (let i = 0; i < e.results.length; i++) {
+            t += e.results[i][0].transcript;
+          }
+          const n = countReadProgress(phraseWordsRef.current, t);
+          setReadMatched(n);
+        };
+        rec.onerror = () => {
+          /* no-speech / aborted are common */
+        };
+        rec.onend = () => {
+          if (recordingVcRef.current && speechRecRef.current === rec) {
+            try {
+              rec.start();
+            } catch {
+              /* */
+            }
+          }
+        };
+        speechRecRef.current = rec;
+        try {
+          rec.start();
+        } catch {
+          speechRecRef.current = null;
+        }
+      }
     } catch {
       setLine("Mic blocked");
       onRecordingStream?.(null);
@@ -167,6 +227,7 @@ export function VoiceCaptchaPanel({
 
   const stopVcAndVerify = async () => {
     recordingVcRef.current = false;
+    stopSpeechRecognition();
     const mr = mediaRecorderRef.current;
     if (!mr || mr.state === "inactive") return;
     setBusy(true);
@@ -216,53 +277,15 @@ export function VoiceCaptchaPanel({
     }
   };
 
-  const playElevenLabsTts = async (text: string) => {
-    if (!text.trim() || !elevenLabsReady) return;
-    setTtsError(null);
-    setTtsPlaying(true);
-    try {
-      const res = await fetch(`${api}/tts-demo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        audioBase64?: string;
-        mime?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.ok || !data.audioBase64) {
-        setTtsError(data.error ?? "ElevenLabs TTS unavailable");
-        setTtsPlaying(false);
-        return;
-      }
-      if (ttsAudioRef.current) {
-        ttsAudioRef.current.pause();
-        ttsAudioRef.current.src = "";
-      }
-      const mime = data.mime ?? "audio/mpeg";
-      const audio = new Audio(`data:${mime};base64,${data.audioBase64}`);
-      ttsAudioRef.current = audio;
-      audio.onended = () => setTtsPlaying(false);
-      audio.onerror = () => setTtsPlaying(false);
-      await audio.play();
-    } catch {
-      setTtsPlaying(false);
-      setTtsError("Playback failed");
-    }
-  };
-
   useEffect(() => {
     return () => {
-      if (ttsAudioRef.current) {
-        ttsAudioRef.current.pause();
-        ttsAudioRef.current = null;
-      }
+      stopSpeechRecognition();
     };
-  }, []);
+  }, [stopSpeechRecognition]);
 
   const challengeReady = Boolean(phrase && challengeId);
+  const phraseWords = useMemo(() => splitPhraseWords(phrase), [phrase]);
+  const showReadAlong = recordingVc && readAlongAvailable && phraseWords.length > 0;
 
   return (
     <div
@@ -274,11 +297,6 @@ export function VoiceCaptchaPanel({
         <p className="voice-captcha__warn">{line}</p>
       ) : (
         <>
-          {!elevenLabsReady ? (
-            <p className="voice-captcha__warn">
-              Add <code>ELEVENLABS_API_KEY</code> on the Worker to hear the phrase (nothing is shown on screen).
-            </p>
-          ) : null}
           {!challengeReady ? (
             <p className="voice-captcha__status" aria-live="polite">
               Loading…
@@ -293,16 +311,40 @@ export function VoiceCaptchaPanel({
               Check “I’m not a robot” on the left, then tap Record.
             </p>
           ) : null}
+          {challengeReady && phrase ? (
+            <div className="voice-captcha__phrase-block">
+              <p className="voice-captcha__phrase-caption">Phrase to repeat</p>
+              <p className="voice-captcha__phrase">
+                {showReadAlong
+                  ? phraseWords.map((w, i) => (
+                      <span key={i}>
+                        {i > 0 ? " " : null}
+                        <span
+                          className={cn(
+                            "voice-captcha__word",
+                            i < readMatched
+                              ? "voice-captcha__word--done"
+                              : i === readMatched
+                                ? "voice-captcha__word--active"
+                                : "voice-captcha__word--pending"
+                          )}
+                        >
+                          {w}
+                        </span>
+                      </span>
+                    ))
+                  : phrase}
+              </p>
+              {recordingVc ? (
+                <p className="voice-captcha__read-hint">
+                  {readAlongAvailable
+                    ? "Words highlight as you speak."
+                    : "Read-along needs Web Speech (Chrome or Edge)."}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="voice-captcha__actions">
-            <button
-              type="button"
-              className="btn-vc btn-vc--tts"
-              onClick={() => void playElevenLabsTts(phrase)}
-              disabled={busy || !challengeReady || !elevenLabsReady || ttsPlaying}
-              title="Hear the challenge phrase"
-            >
-              {ttsPlaying ? "Playing…" : "Play phrase"}
-            </button>
             <button
               type="button"
               className="btn-vc"
@@ -354,8 +396,6 @@ export function VoiceCaptchaPanel({
       ) : line === "…" ? (
         <p className="voice-captcha__line voice-captcha__line--pending">…</p>
       ) : null}
-
-      {ttsError ? <p className="voice-captcha__tts-err">{ttsError}</p> : null}
     </div>
   );
 }
